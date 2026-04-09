@@ -12,18 +12,21 @@ def load_media(file_path: str) -> tuple[str, float]:
     Returns (wav_path, duration_sec).
     Raises ValueError for unsupported format or too-short files.
     Raises FileNotFoundError if file does not exist.
+    Caller is responsible for deleting the returned wav_path (tempfile with delete=False).
     """
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
-    if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+
+    ext = path.suffix.lower()
+    if ext not in SUPPORTED_EXTENSIONS:
         raise ValueError(
             f"Unsupported format: {path.suffix}. Supported: {sorted(SUPPORTED_EXTENSIONS)}"
         )
 
-    if path.suffix.lower() == ".mp4":
+    if ext == ".mp4":
         audio = AudioSegment.from_file(str(path), format="mp4")
-    elif path.suffix.lower() == ".mp3":
+    elif ext == ".mp3":
         audio = AudioSegment.from_mp3(str(path))
     else:
         audio = AudioSegment.from_wav(str(path))
@@ -37,5 +40,7 @@ def load_media(file_path: str) -> tuple[str, float]:
         )
 
     tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    audio.export(tmp.name, format="wav")
-    return tmp.name, duration_sec
+    tmp_name = tmp.name
+    tmp.close()
+    audio.export(tmp_name, format="wav")
+    return tmp_name, duration_sec
