@@ -100,7 +100,10 @@ async def analyze(
                 Path(wav_path).unlink(missing_ok=True)
 
     finally:
-        Path(tmp_upload.name).unlink(missing_ok=True)
+        try:
+            Path(tmp_upload.name).unlink(missing_ok=True)
+        except PermissionError:
+            pass  # Windows: file still held by pydub/ffprobe subprocess on error
 
     return {
         "overall_score": result.overall_score,

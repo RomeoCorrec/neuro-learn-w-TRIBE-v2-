@@ -24,12 +24,18 @@ def load_media(file_path: str) -> tuple[str, float]:
             f"Unsupported format: {path.suffix}. Supported: {sorted(SUPPORTED_EXTENSIONS)}"
         )
 
-    if ext == ".mp4":
-        audio = AudioSegment.from_file(str(path), format="mp4")
-    elif ext == ".mp3":
-        audio = AudioSegment.from_mp3(str(path))
-    else:
-        audio = AudioSegment.from_wav(str(path))
+    try:
+        if ext == ".mp4":
+            audio = AudioSegment.from_file(str(path), format="mp4")
+        elif ext == ".mp3":
+            audio = AudioSegment.from_mp3(str(path))
+        else:
+            audio = AudioSegment.from_wav(str(path))
+    except FileNotFoundError as exc:
+        raise ValueError(
+            "ffmpeg is required to process MP3/MP4 files but was not found. "
+            "Install it with: winget install ffmpeg  (then restart your terminal)"
+        ) from exc
 
     audio = audio.set_frame_rate(16000).set_channels(1)
     duration_sec = len(audio) / 1000.0
