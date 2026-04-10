@@ -43,9 +43,15 @@ if uploaded_file and st.button("▶ Analyze", type="primary"):
                 st.session_state["uploaded_bytes"] = uploaded_file.getvalue()
                 st.session_state["uploaded_name"] = uploaded_file.name
             else:
-                st.error(f"API error {response.status_code}: {response.json().get('detail', 'Unknown error')}")
+                try:
+                    detail = response.json().get("detail", response.text)
+                except Exception:
+                    detail = response.text or "Unknown error"
+                st.error(f"API error {response.status_code}: {detail}")
         except requests.exceptions.ConnectionError:
             st.error(f"Cannot reach API at {api_url}. Is it running?")
+        except requests.exceptions.RequestException as exc:
+            st.error(f"Request failed: {exc}")
 
 # ── Results ───────────────────────────────────────────────────────────────
 if "result" in st.session_state:
