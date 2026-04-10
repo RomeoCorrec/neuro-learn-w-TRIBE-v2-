@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import threading
 import time
 import uuid
 import tempfile
@@ -23,6 +24,14 @@ _engine: InferenceEngine | None = None
 _roi_extractor: ROIExtractor | None = None
 _animator: BrainAnimator | None = None
 _gif_registry: dict[str, float] = {}  # gif_path → created_at timestamp
+_progress: dict = {"stage": "idle", "pct": 0}
+_progress_lock = threading.Lock()  # single-worker guard; use per-request IDs for multi-user
+
+
+def _set_progress(stage: str, pct: int) -> None:
+    with _progress_lock:
+        _progress["stage"] = stage
+        _progress["pct"] = pct
 
 
 @asynccontextmanager
@@ -47,6 +56,11 @@ def _cleanup_stale_gifs() -> None:
         _gif_registry.pop(p, None)
 
 
+@app.get("/progress")
+def progress():
+    return _progress
+
+
 @app.get("/health")
 def health():
     return {
@@ -69,31 +83,41 @@ async def analyze(
     gif_id: str | None = None
     wav_path: str | None = None
 
+    _set_progress("uploading", 5)
     try:
         tmp_upload.write(await file.read())
         tmp_upload.close()
 
+        _set_progress("loading", 10)
         try:
             wav_path, duration_sec = load_media(tmp_upload.name)
         except ValueError as exc:
+            _set_progress("idle", 0)
             raise HTTPException(status_code=400, detail=str(exc))
 
         # Per-request mock override: if request sends mock=True, use mock engine
         engine = InferenceEngine(mock=True) if mock else _engine
 
         try:
+            _set_progress("inference", 15)
             preds = engine.predict(wav_path, duration_sec)
+            _set_progress("roi_extraction", 70)
             roi_signals = _roi_extractor.extract(preds)
+            _set_progress("scoring", 75)
             result = compute(roi_signals, window_sec=window_sec)
 
+            _set_progress("animation", 80)
             gif_id = uuid.uuid4().hex
             gif_path = str(STATIC_DIR / f"brain_anim_{gif_id}.gif")
             _animator.animate(preds, gif_path)
             _gif_registry[gif_path] = time.time()
+            _set_progress("done", 100)
 
         except HTTPException:
+            _set_progress("idle", 0)
             raise
         except Exception as exc:
+            _set_progress("idle", 0)
             raise HTTPException(status_code=500, detail=str(exc))
         finally:
             if wav_path is not None:

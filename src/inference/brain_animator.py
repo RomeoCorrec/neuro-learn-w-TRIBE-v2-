@@ -26,13 +26,20 @@ class BrainAnimator:
         preds: np.ndarray,
         output_path: str,
         fps: int = 1,
+        max_frames: int = 30,
     ) -> str:
         """
         preds: (n_timesteps, 20484)
         Saves GIF to output_path and returns output_path.
+        At most max_frames frames are rendered (subsampled for long files).
         """
+        n = preds.shape[0]
+        if n > max_frames:
+            indices = np.linspace(0, n - 1, max_frames, dtype=int)
+        else:
+            indices = np.arange(n)
         vmax = float(np.percentile(np.abs(preds), 95)) or 1.0
-        frames = [self._render_frame(preds[t], vmax) for t in range(preds.shape[0])]
+        frames = [self._render_frame(preds[t], vmax) for t in indices]
         duration_ms = int(1000 / fps)
         imageio.mimsave(output_path, frames, duration=duration_ms, loop=0)
         return output_path
